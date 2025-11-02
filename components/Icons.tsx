@@ -112,3 +112,15 @@ export const RedoIcon: React.FC<{ className?: string }> = ({ className }) => (
         <path strokeLinecap="round" strokeLinejoin="round" d="M15 9L21 15m0 0l-6 6M21 15H9a6 6 0 010-12h3" />
     </svg>
 );
+
+export const FlipHorizontalIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={`h-6 w-6 ${className}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v18M8 7l-4 5 4 5m8-10l4 5-4 5" />
+    </svg>
+);
+
+export const FlipVerticalIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={`h-6 w-6 ${className}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 12h18M7 8l5-4 5 4m-10 8l5 4 5-4" />
+    </svg>
+);

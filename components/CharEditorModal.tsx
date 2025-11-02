@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import type { GeneratedChar } from '../types';
 import CharGrid from './CharGrid';
-import { CloseIcon, ArrowUpIcon, ArrowDownIcon, ArrowLeftIcon, ArrowRightIcon } from './Icons';
+import { CloseIcon, ArrowUpIcon, ArrowDownIcon, ArrowLeftIcon, ArrowRightIcon, FlipHorizontalIcon, FlipVerticalIcon } from './Icons';
 
 interface CharEditorModalProps {
   charData: GeneratedChar;
@@ -101,6 +101,14 @@ const CharEditorModal: React.FC<CharEditorModalProps> = ({ charData, height, onS
     });
   };
 
+  const handleFlipHorizontal = () => {
+    setBitmap(prevBitmap => prevBitmap.map(row => [...row].reverse()));
+  };
+
+  const handleFlipVertical = () => {
+    setBitmap(prevBitmap => [...prevBitmap].reverse());
+  };
+
   const handleCopyFromChar = () => {
     if (!charToCopyAscii) return; // No character selected
 
@@ -165,13 +173,23 @@ const CharEditorModal: React.FC<CharEditorModalProps> = ({ charData, height, onS
                   
                   {/* Bottom controls container */}
                   <div className="flex flex-col items-center gap-3">
-                      {/* Horizontal shift controls */}
+                      {/* Transform controls container */}
                       <div className="flex items-center gap-2">
+                          {/* Shift */}
                           <button onClick={() => handleShift('left')} className={commonButtonClasses} aria-label="Shift character left">
                               <ArrowLeftIcon />
                           </button>
                           <button onClick={() => handleShift('right')} className={commonButtonClasses} aria-label="Shift character right">
                               <ArrowRightIcon />
+                          </button>
+                          {/* Separator */}
+                          <div className="w-px h-8 bg-gray-600 mx-2" />
+                          {/* Flip */}
+                          <button onClick={handleFlipHorizontal} className={commonButtonClasses} aria-label="Flip horizontal">
+                              <FlipHorizontalIcon />
+                          </button>
+                          <button onClick={handleFlipVertical} className={commonButtonClasses} aria-label="Flip vertical">
+                              <FlipVerticalIcon />
                           </button>
                       </div>
 
