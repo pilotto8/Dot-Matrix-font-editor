@@ -116,7 +116,9 @@ export function parseArrayString(text: string): number[] {
 export function parseImportedData(options: ImportOptions): ParsedFontData {
     const { rawData, rawWidths, rawOffsets, characterSet, charHeight, charWidth, isDynamic } = options;
     const generatedChars: GeneratedChar[] = [];
-    const uniqueChars = [...new Set(characterSet.split(''))];
+    const uniqueChars = Array.from(new Set(Array.from(characterSet)));
+    uniqueChars.sort((a, b) => (a.codePointAt(0) ?? 0) - (b.codePointAt(0) ?? 0));
+    const sortedCharacterSet = uniqueChars.join('');
 
     if (charHeight <= 0 || charHeight > 8) {
         throw new Error(`Invalid height: ${charHeight}. Must be between 1 and 8.`);
@@ -153,7 +155,7 @@ export function parseImportedData(options: ImportOptions): ParsedFontData {
 
             generatedChars.push({
                 char,
-                ascii: char.charCodeAt(0),
+                codePoint: char.codePointAt(0)!,
                 bitmap,
                 bytes,
             });
@@ -164,7 +166,7 @@ export function parseImportedData(options: ImportOptions): ParsedFontData {
             fontOptions: {
                 width: maxWidth > 0 ? maxWidth : 8, // Sensible default if no chars
                 height: charHeight,
-                characterSet: characterSet,
+                characterSet: sortedCharacterSet,
                 dynamicWidth: true,
                 charSpacing: 0,
             }
@@ -196,7 +198,7 @@ export function parseImportedData(options: ImportOptions): ParsedFontData {
 
             generatedChars.push({
                 char,
-                ascii: char.charCodeAt(0),
+                codePoint: char.codePointAt(0)!,
                 bitmap,
                 bytes,
             });
@@ -207,7 +209,7 @@ export function parseImportedData(options: ImportOptions): ParsedFontData {
             fontOptions: {
                 width: charWidth,
                 height: charHeight,
-                characterSet: characterSet,
+                characterSet: sortedCharacterSet,
                 dynamicWidth: false,
                 charSpacing: 0, // Assuming imported fonts have spacing baked in
             }

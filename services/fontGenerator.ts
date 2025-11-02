@@ -1,3 +1,4 @@
+
 import type { GeneratedChar, FontGeneratorOptions } from '../types';
 
 function imageDataToBitmap(imageData: ImageData, threshold: number): boolean[][] {
@@ -41,7 +42,7 @@ export function generateChars(options: FontGeneratorOptions, characters: string[
     if (totalWidth <= 0) {
       return characters.map(char => ({
         char,
-        ascii: char.charCodeAt(0),
+        codePoint: char.codePointAt(0)!,
         bitmap: Array.from({ length: height }, () => []),
         bytes: [],
       }));
@@ -50,7 +51,7 @@ export function generateChars(options: FontGeneratorOptions, characters: string[
     const finalBytes = Array(totalWidth).fill(0);
     return characters.map(char => ({
       char,
-      ascii: char.charCodeAt(0),
+      codePoint: char.codePointAt(0)!,
       bitmap: finalBitmap,
       bytes: finalBytes,
     }));
@@ -76,7 +77,7 @@ export function generateChars(options: FontGeneratorOptions, characters: string[
       const totalWidth = dynamicWidth ? 0 : glyphRenderWidth + charSpacing;
       generatedChars.push({
           char,
-          ascii: char.charCodeAt(0),
+          codePoint: char.codePointAt(0)!,
           bitmap: Array(height).fill(0).map(() => Array(totalWidth).fill(false)),
           bytes: Array(totalWidth).fill(0),
       });
@@ -229,7 +230,7 @@ export function generateChars(options: FontGeneratorOptions, characters: string[
     
     generatedChars.push({
       char,
-      ascii: char.charCodeAt(0),
+      codePoint: char.codePointAt(0)!,
       bitmap: finalBitmap,
       bytes: msbTopBytes,
     });
@@ -243,7 +244,7 @@ export function generateFontData(options: FontGeneratorOptions): Promise<Generat
   return new Promise((resolve) => {
     setTimeout(() => {
         const { characterSet } = options;
-        const uniqueCharacters = [...new Set(characterSet.split(''))];
+        const uniqueCharacters = [...new Set(Array.from(characterSet))];
         resolve(generateChars(options, uniqueCharacters));
     }, 10);
   });
@@ -251,7 +252,7 @@ export function generateFontData(options: FontGeneratorOptions): Promise<Generat
 
 export function generatePreviewFontData(options: FontGeneratorOptions, previewCharacters: string): Promise<GeneratedChar[]> {
     return new Promise((resolve) => {
-        const characters = previewCharacters.split('');
+        const characters = Array.from(previewCharacters);
         resolve(generateChars(options, characters));
     });
 }

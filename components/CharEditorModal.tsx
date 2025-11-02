@@ -15,13 +15,13 @@ interface CharEditorModalProps {
 
 const CharEditorModal: React.FC<CharEditorModalProps> = ({ charData, height, onSave, onClose, isDynamicWidth, fullFontData }) => {
   const [bitmap, setBitmap] = useState<boolean[][]>(charData.bitmap);
-  const [charToCopyAscii, setCharToCopyAscii] = useState<string>('');
+  const [charToCopyCodePoint, setCharToCopyCodePoint] = useState<string>('');
 
 
   // Reset local state if the character prop changes
   useEffect(() => {
     setBitmap(charData.bitmap);
-    setCharToCopyAscii(''); // Reset selection when modal opens for a new char
+    setCharToCopyCodePoint(''); // Reset selection when modal opens for a new char
   }, [charData]);
 
   // Handle keyboard events
@@ -110,9 +110,9 @@ const CharEditorModal: React.FC<CharEditorModalProps> = ({ charData, height, onS
   };
 
   const handleCopyFromChar = () => {
-    if (!charToCopyAscii) return; // No character selected
+    if (!charToCopyCodePoint) return; // No character selected
 
-    const sourceChar = fullFontData.find(c => c.ascii === parseInt(charToCopyAscii, 10));
+    const sourceChar = fullFontData.find(c => c.codePoint === parseInt(charToCopyCodePoint, 10));
     if (!sourceChar) return; // Character not found
 
     // Deep copy the bitmap to avoid reference issues.
@@ -222,21 +222,21 @@ const CharEditorModal: React.FC<CharEditorModalProps> = ({ charData, height, onS
             <h4 className="text-md font-semibold text-gray-300 mb-3">Copy Pixels From Character</h4>
             <div className="flex items-center gap-3">
                 <select
-                    value={charToCopyAscii}
-                    onChange={(e) => setCharToCopyAscii(e.target.value)}
+                    value={charToCopyCodePoint}
+                    onChange={(e) => setCharToCopyCodePoint(e.target.value)}
                     className="flex-grow bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white focus:ring-2 focus:ring-cyan-400 focus:outline-none transition"
                     aria-label="Select character to copy from"
                 >
                     <option value="" disabled>Select a character...</option>
                     {fullFontData.map(c => (
-                        <option key={c.ascii} value={c.ascii}>
-                            {c.char === ' ' ? '" "' : c.char} (ASCII: {c.ascii})
+                        <option key={c.codePoint} value={c.codePoint}>
+                            {c.char === ' ' ? '" "' : c.char} (U+{c.codePoint.toString(16).toUpperCase()})
                         </option>
                     ))}
                 </select>
                 <button
                     onClick={handleCopyFromChar}
-                    disabled={!charToCopyAscii}
+                    disabled={!charToCopyCodePoint}
                     className="px-4 py-2 rounded-md bg-gray-600 hover:bg-gray-500 text-white font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                     Copy

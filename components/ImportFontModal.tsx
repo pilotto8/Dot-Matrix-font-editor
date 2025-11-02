@@ -251,8 +251,9 @@ const ImportFontModal: React.FC<ImportFontModalProps> = ({ onClose, onImport }) 
     }
     setCharacterSet(prev => {
         const combined = prev + chars.join('');
-        const uniqueChars = [...new Set(combined.split(''))].join('');
-        return uniqueChars;
+        const uniqueChars = [...new Set(Array.from(combined))];
+        uniqueChars.sort((a, b) => (a.codePointAt(0) ?? 0) - (b.codePointAt(0) ?? 0));
+        return uniqueChars.join('');
     });
   };
 
@@ -272,8 +273,9 @@ const ImportFontModal: React.FC<ImportFontModalProps> = ({ onClose, onImport }) 
     
     setCharacterSet(prev => {
         const combined = prev + cyrillicChars.join('');
-        const uniqueChars = [...new Set(combined.split(''))].join('');
-        return uniqueChars;
+        const uniqueChars = [...new Set(Array.from(combined))];
+        uniqueChars.sort((a, b) => (a.codePointAt(0) ?? 0) - (b.codePointAt(0) ?? 0));
+        return uniqueChars.join('');
     });
   };
   
@@ -293,15 +295,14 @@ const ImportFontModal: React.FC<ImportFontModalProps> = ({ onClose, onImport }) 
     }
 
     setCharacterSet(prev => {
-        const existingChars = new Set(prev.split(''));
         const charsToAdd = [];
         for (let i = start; i <= end; i++) {
-            const newChar = String.fromCharCode(i);
-            if (!existingChars.has(newChar)) {
-                charsToAdd.push(newChar);
-            }
+            charsToAdd.push(String.fromCodePoint(i));
         }
-        return prev + charsToAdd.join('');
+        const combined = prev + charsToAdd.join('');
+        const uniqueChars = [...new Set(Array.from(combined))];
+        uniqueChars.sort((a, b) => (a.codePointAt(0) ?? 0) - (b.codePointAt(0) ?? 0));
+        return uniqueChars.join('');
     });
     
     setRangeStart('');
@@ -351,7 +352,7 @@ const ImportFontModal: React.FC<ImportFontModalProps> = ({ onClose, onImport }) 
             throw new Error(`Based on the provided data and settings, the calculated number of characters is ${numChars}. Cannot generate character set.`);
         }
         
-        const chars = Array.from({ length: numChars }, (_, i) => String.fromCharCode(startCode + i));
+        const chars = Array.from({ length: numChars }, (_, i) => String.fromCodePoint(startCode + i));
         setCharacterSet(chars.join(''));
 
     } catch (e) {

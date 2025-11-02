@@ -52,7 +52,7 @@ const App: React.FC = () => {
   const [options, setOptions] = useState<FontGeneratorOptions>({
     fontFamily: 'VT323',
     fontWeight: 'normal',
-    width: 6,
+    width: 5,
     height: 8,
     charSpacing: 1,
     characterSet: Array.from({ length: 126 - 32 + 1 }, (_, i) => String.fromCharCode(32 + i)).join(''),
@@ -73,7 +73,6 @@ const App: React.FC = () => {
   const [loadingAction, setLoadingAction] = useState<'generate' | 'sync' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isCharSetVisible, setIsCharSetVisible] = useState(true);
-  const [isStylePreviewVisible, setIsStylePreviewVisible] = useState(true);
   const [isLivePreviewVisible, setIsLivePreviewVisible] = useState(true);
   const [editingChar, setEditingChar] = useState<{ char: GeneratedChar; index: number; isPreview: boolean } | null>(null);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -224,12 +223,12 @@ const App: React.FC = () => {
         if (options.width <= 0 || options.height <= 0) throw new Error('Width and height must be positive.');
         if (!options.characterSet) throw new Error('Character set cannot be empty.');
 
-        const newCharSet = new Set(options.characterSet.split(''));
+        const newCharSet = new Set(Array.from(options.characterSet));
         const oldFontData = fontData || [];
         
         const existingCharsInFont = new Set(oldFontData.map(d => d.char));
         
-        const charsToAdd = [...newCharSet].map(String).filter(char => !existingCharsInFont.has(char));
+        const charsToAdd = [...newCharSet].filter(char => !existingCharsInFont.has(char));
         
         const keptFontData = oldFontData.filter(charData => newCharSet.has(charData.char));
         
@@ -238,7 +237,7 @@ const App: React.FC = () => {
             newCharsData = await generateChars(options, charsToAdd);
         }
         
-        const finalFontData = [...keptFontData, ...newCharsData].sort((a, b) => a.ascii - b.ascii);
+        const finalFontData = [...keptFontData, ...newCharsData].sort((a, b) => a.codePoint - b.codePoint);
         
         setFontData(finalFontData);
 
@@ -259,6 +258,10 @@ const App: React.FC = () => {
      if (type === 'checkbox') {
         const { checked } = e.target as HTMLInputElement;
         setOptions(prev => ({ ...prev, [name]: checked }));
+    } else if (name === 'characterSet') {
+        const uniqueChars = [...new Set(Array.from(value))];
+        uniqueChars.sort((a, b) => (a.codePointAt(0) ?? 0) - (b.codePointAt(0) ?? 0));
+        setOptions(prev => ({ ...prev, [name]: uniqueChars.join('') }));
     } else {
         const isNumeric = ['width', 'height', 'fontSizeAdjustment', 'renderThreshold', 'charSpacing', 'xOffset', 'yOffset'].includes(name);
         const parsedValue = isNumeric ? parseInt(value, 10) : value;
@@ -283,8 +286,9 @@ const App: React.FC = () => {
     
     setOptions(prev => {
         const combined = prev.characterSet + extendedChars.join('');
-        const uniqueChars = [...new Set(combined.split(''))].join('');
-        return { ...prev, characterSet: uniqueChars };
+        const uniqueChars = [...new Set(Array.from(combined))];
+        uniqueChars.sort((a, b) => (a.codePointAt(0) ?? 0) - (b.codePointAt(0) ?? 0));
+        return { ...prev, characterSet: uniqueChars.join('') };
     });
   };
 
@@ -304,8 +308,9 @@ const App: React.FC = () => {
     
     setOptions(prev => {
         const combined = prev.characterSet + cyrillicChars.join('');
-        const uniqueChars = [...new Set(combined.split(''))].join('');
-        return { ...prev, characterSet: uniqueChars };
+        const uniqueChars = [...new Set(Array.from(combined))];
+        uniqueChars.sort((a, b) => (a.codePointAt(0) ?? 0) - (b.codePointAt(0) ?? 0));
+        return { ...prev, characterSet: uniqueChars.join('') };
     });
   };
 
@@ -335,20 +340,21 @@ const App: React.FC = () => {
         setCharSetError('Range is too large. Please keep it under 1000 characters for performance reasons.');
         return;
     }
-    if (start < 0 || end > 65535) {
-        setCharSetError('Hex codes must be within a reasonable range (e.g., 0-FFFF).');
+    if (start < 0 || end > 0x10FFFF) {
+        setCharSetError('Hex codes must be within the valid Unicode range (0-10FFFF).');
         return;
     }
 
     const charsToAdd: string[] = [];
     for (let i = start; i <= end; i++) {
-        charsToAdd.push(String.fromCharCode(i));
+        charsToAdd.push(String.fromCodePoint(i));
     }
     
     setOptions(prev => {
         const combined = prev.characterSet + charsToAdd.join('');
-        const uniqueChars = [...new Set(combined.split(''))].join('');
-        return { ...prev, characterSet: uniqueChars };
+        const uniqueChars = [...new Set(Array.from(combined))];
+        uniqueChars.sort((a, b) => (a.codePointAt(0) ?? 0) - (b.codePointAt(0) ?? 0));
+        return { ...prev, characterSet: uniqueChars.join('') };
     });
     
     setRangeStart('');
@@ -361,30 +367,32 @@ const App: React.FC = () => {
       setFontData(newFontData);
   };
 
-  const handleCharAdd = (ascii: number) => {
-      const newCharStr = String.fromCharCode(ascii);
+  const handleCharAdd = (codePoint: number) => {
+      const newCharStr = String.fromCodePoint(codePoint);
       if (options.characterSet.includes(newCharStr)) {
-          setError(`Character '${newCharStr}' (ASCII: ${ascii}) already exists in the font set.`);
+          setError(`Character '${newCharStr}' (Code: ${codePoint}) already exists in the font set.`);
           setIsAddCharModalOpen(false);
           return;
       }
 
-      try {
-          const [newCharData] = generateChars(options, [newCharStr]);
-          
-          const newFontData = [...(fontData || []), newCharData]
-              .sort((a, b) => a.ascii - b.ascii);
-          
-          setFontData(newFontData);
-          setIsAddCharModalOpen(false);
+      (async () => {
+        try {
+            const [newCharData] = await generateChars(options, [newCharStr]);
+            
+            const newFontData = [...(fontData || []), newCharData]
+                .sort((a, b) => a.codePoint - b.codePoint);
+            
+            setFontData(newFontData);
+            setIsAddCharModalOpen(false);
 
-      } catch (e) {
-          if (e instanceof Error) {
-              setError(e.message);
-          } else {
-              setError('An unknown error occurred while adding the character.');
-          }
-      }
+        } catch (e) {
+            if (e instanceof Error) {
+                setError(e.message);
+            } else {
+                setError('An unknown error occurred while adding the character.');
+            }
+        }
+      })();
   };
 
   const commonFonts = [
@@ -411,7 +419,7 @@ const App: React.FC = () => {
               const charWidth = charData.bitmap[0]?.length || 0;
               currentLine.push(
                   <CharGrid 
-                      key={`${charData.ascii}-${index}`} 
+                      key={`${charData.codePoint}-${index}`} 
                       charData={charData} 
                       width={charWidth} 
                       height={options.height}
@@ -718,8 +726,9 @@ const App: React.FC = () => {
                           name="characterSet"
                           value={options.characterSet}
                           onChange={handleOptionChange}
-                          className="bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white font-mono h-24 resize-y focus:ring-2 focus:ring-cyan-400 focus:outline-none transition w-full"
+                          className="bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white h-24 resize-y focus:ring-2 focus:ring-cyan-400 focus:outline-none transition w-full"
                           placeholder="Type all characters you want to generate here..."
+                          style={{ fontFamily: options.fontFamily, fontWeight: options.fontWeight, fontSize: '1.2rem', lineHeight: '1.6rem' }}
                       />
 
                       <div className="bg-gray-700/50 p-3 rounded-lg border border-gray-600 space-y-3">
@@ -740,29 +749,6 @@ const App: React.FC = () => {
                       </div>
                       
                       <p className="text-xs text-gray-500 !mt-1">All unique characters to include in the font data.</p>
-                    </div>
-                  )}
-                </div>
-                
-                <div className="bg-gray-700/50 p-3 rounded-lg border border-gray-600">
-                  <button 
-                      onClick={() => setIsStylePreviewVisible(!isStylePreviewVisible)} 
-                      className="flex items-center gap-2 text-gray-400 text-xs font-medium uppercase tracking-wider w-full text-left hover:text-gray-200 transition-colors"
-                      aria-expanded={isStylePreviewVisible}
-                      aria-controls="style-preview-content"
-                  >
-                      <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${isStylePreviewVisible ? '' : '-rotate-90'}`} />
-                      <span>Font Style Preview</span>
-                  </button>
-                  {isStylePreviewVisible && (
-                    <div
-                      id="style-preview-content"
-                      className="mt-2 bg-gray-900 p-4 rounded text-white text-xl overflow-x-auto whitespace-nowrap"
-                      style={{ fontFamily: options.fontFamily, fontWeight: options.fontWeight }}
-                      aria-live="polite"
-                      title={`Previewing font: ${options.fontFamily}`}
-                    >
-                      The quick brown fox jumps over the lazy dog. 1234567890
                     </div>
                   )}
                 </div>

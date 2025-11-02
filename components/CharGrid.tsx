@@ -1,3 +1,4 @@
+
 import React from 'react';
 import type { GeneratedChar } from '../types';
 
@@ -70,7 +71,7 @@ const CharGrid: React.FC<CharGridProps> = ({ charData, width, height, onPixelTog
       </div>
       <div className="text-center">
         <p className="font-mono text-lg text-white">{charData.char === ' ' ? '" "' : charData.char}</p>
-        <p className="text-xs text-gray-500">ASCII: {charData.ascii}</p>
+        <p className="text-xs text-gray-500">U+{charData.codePoint.toString(16).toUpperCase().padStart(4, '0')}</p>
       </div>
     </div>
   );

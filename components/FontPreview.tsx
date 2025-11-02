@@ -1,3 +1,4 @@
+
 import React from 'react';
 import type { GeneratedChar } from '../types';
 import { EyeIcon, PlusIcon } from './Icons';
@@ -26,7 +27,7 @@ const FontPreview: React.FC<FontPreviewProps> = ({ fontData, height, onCharClick
           const charWidth = charData.bitmap[0]?.length || 0;
           return (
             <CharGrid 
-              key={`${charData.ascii}-${index}`} 
+              key={`${charData.codePoint}-${index}`} 
               charData={charData} 
               width={charWidth} 
               height={height}

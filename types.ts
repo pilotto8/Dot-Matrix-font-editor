@@ -1,7 +1,7 @@
 
 export interface GeneratedChar {
   char: string;
-  ascii: number;
+  codePoint: number;
   bitmap: boolean[][];
   bytes: number[];
 }

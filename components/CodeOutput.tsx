@@ -63,40 +63,147 @@ const CodeOutput: React.FC<CodeOutputProps> = ({ fontData, options }) => {
         
         const formatHex = (b: number) => `0x${b.toString(16).padStart(2, '0').toUpperCase()}`;
 
-        switch (outputFormat) {
-            case 'c':
-                let cCode = header + `\n`;
-                cCode += `// Width of each character in pixels (columns)\n`;
-                cCode += `const unsigned char ${fontName}_widths[] = {\n  ${widths.join(', ')}\n};\n\n`;
+        const ranges: { start: GeneratedChar; end: GeneratedChar; startIndex: number; endIndex: number }[] = [];
+        if (fontData.length > 0) {
+            let currentRange = {
+            start: fontData[0],
+            end: fontData[0],
+            startIndex: 0,
+            endIndex: 0
+            };
+            for (let i = 1; i < fontData.length; i++) {
+            if (fontData[i].codePoint === fontData[i - 1].codePoint + 1) {
+                currentRange.end = fontData[i];
+                currentRange.endIndex = i;
+            } else {
+                ranges.push(currentRange);
+                currentRange = {
+                start: fontData[i],
+                end: fontData[i],
+                startIndex: i,
+                endIndex: i
+                };
+            }
+            }
+            ranges.push(currentRange);
+        }
 
+        switch (outputFormat) {
+            case 'c': {
+                let cCode = header + `\n`;
+                const CHUNK_SIZE = 16;
+        
+                const formatRangeComment = (range: typeof ranges[0]) => {
+                    const start = range.start;
+                    const end = range.end;
+                    const escChar = (c: string) => c.replace(/'/g, "\\'").replace(/\\/g, "\\\\");
+                    if (start.codePoint === end.codePoint) {
+                        return `  // Char '${escChar(start.char)}' (Code: ${start.codePoint})\n`;
+                    }
+                    return `  // Characters '${escChar(start.char)}' (Code: ${start.codePoint}) to '${escChar(end.char)}' (Code: ${end.codePoint})\n`;
+                };
+        
+                cCode += `// Width of each character in pixels (columns)\n`;
+                cCode += `const unsigned char ${fontName}_widths[] = {\n`;
+                if (ranges.length === 0 && widths.length > 0) {
+                    cCode += `  ${widths.join(', ')}\n`;
+                } else if (ranges.length > 0) {
+                    ranges.forEach(range => {
+                        cCode += formatRangeComment(range);
+                        const rangeValues = widths.slice(range.startIndex, range.endIndex + 1);
+                        for (let i = 0; i < rangeValues.length; i += CHUNK_SIZE) {
+                            cCode += '  ' + rangeValues.slice(i, i + CHUNK_SIZE).join(', ') + ',\n';
+                        }
+                    });
+                    cCode = cCode.slice(0, -2) + '\n';
+                }
+                cCode += `};\n\n`;
+        
                 cCode += `// Start address of each character in the font data array\n`;
-                cCode += `const unsigned int ${fontName}_offsets[] = {\n  ${offsets.join(', ')}\n};\n\n`;
+                cCode += `const unsigned int ${fontName}_offsets[] = {\n`;
+                if (ranges.length === 0 && offsets.length > 0) {
+                    cCode += `  ${offsets.join(', ')}\n`;
+                } else if (ranges.length > 0) {
+                  ranges.forEach(range => {
+                      cCode += formatRangeComment(range);
+                      const rangeValues = offsets.slice(range.startIndex, range.endIndex + 1);
+                      for (let i = 0; i < rangeValues.length; i += CHUNK_SIZE) {
+                          cCode += '  ' + rangeValues.slice(i, i + CHUNK_SIZE).join(', ') + ',\n';
+                      }
+                  });
+                  cCode = cCode.slice(0, -2) + '\n';
+                }
+                cCode += `};\n\n`;
                 
                 cCode += `// Font data, column by column, for all characters concatenated\n`;
                 cCode += `const unsigned char ${fontName}_data[] = {\n`;
-                const CHUNK_SIZE = 16;
-                for (let i = 0; i < font_data.length; i += CHUNK_SIZE) {
+                if (font_data.length > 0) {
+                  for (let i = 0; i < font_data.length; i += CHUNK_SIZE) {
                     cCode += '  ' + font_data.slice(i, i + CHUNK_SIZE).map(formatHex).join(', ') + ',\n';
+                  }
+                  cCode = cCode.slice(0, -2) + '\n';
                 }
                 cCode += `};\n`;
                 return cCode;
+            }
 
-            case 'python':
+            case 'python': {
                 let pyCode = header.replace(/\/\//g, '#') + `\n`;
+                const PY_CHUNK_SIZE = 16;
+        
+                const formatRangeComment = (range: typeof ranges[0]) => {
+                    const start = range.start;
+                    const end = range.end;
+                    const escChar = (c: string) => c.replace(/'/g, "\\'").replace(/\\/g, "\\\\");
+                    if (start.codePoint === end.codePoint) {
+                        return `    # Char '${escChar(start.char)}' (Code: ${start.codePoint})\n`;
+                    }
+                    return `    # Characters '${escChar(start.char)}' (Code: ${start.codePoint}) to '${escChar(end.char)}' (Code: ${end.codePoint})\n`;
+                };
+
                 pyCode += `# Width of each character in pixels (columns)\n`;
-                pyCode += `${fontName}_widths = [${widths.join(', ')}]\n\n`;
+                pyCode += `${fontName}_widths = [\n`;
+                if (ranges.length === 0 && widths.length > 0) {
+                     pyCode += `    ${widths.join(', ')}\n`;
+                } else if (ranges.length > 0) {
+                    ranges.forEach(range => {
+                        pyCode += formatRangeComment(range);
+                        const rangeValues = widths.slice(range.startIndex, range.endIndex + 1);
+                        for (let i = 0; i < rangeValues.length; i += PY_CHUNK_SIZE) {
+                            pyCode += '    ' + rangeValues.slice(i, i + PY_CHUNK_SIZE).join(', ') + ',\n';
+                        }
+                    });
+                    pyCode = pyCode.slice(0, -2) + '\n';
+                }
+                pyCode += `]\n\n`;
 
                 pyCode += `# Start address of each character in the font data array\n`;
-                pyCode += `${fontName}_offsets = [${offsets.join(', ')}]\n\n`;
+                pyCode += `${fontName}_offsets = [\n`;
+                if (ranges.length === 0 && offsets.length > 0) {
+                    pyCode += `    ${offsets.join(', ')}\n`;
+                } else if (ranges.length > 0) {
+                    ranges.forEach(range => {
+                        pyCode += formatRangeComment(range);
+                        const rangeValues = offsets.slice(range.startIndex, range.endIndex + 1);
+                        for (let i = 0; i < rangeValues.length; i += PY_CHUNK_SIZE) {
+                            pyCode += '    ' + rangeValues.slice(i, i + PY_CHUNK_SIZE).join(', ') + ',\n';
+                        }
+                    });
+                    pyCode = pyCode.slice(0, -2) + '\n';
+                }
+                pyCode += `]\n\n`;
 
                 pyCode += `# Font data, column by column, for all characters concatenated\n`;
                 pyCode += `${fontName}_data = [\n`;
-                const PY_CHUNK_SIZE = 16;
-                for (let i = 0; i < font_data.length; i += PY_CHUNK_SIZE) {
-                    pyCode += '    ' + font_data.slice(i, i + PY_CHUNK_SIZE).map(b => `0x${b.toString(16).padStart(2, '0')}`).join(', ') + ',\n';
+                if (font_data.length > 0) {
+                    for (let i = 0; i < font_data.length; i += PY_CHUNK_SIZE) {
+                        pyCode += '    ' + font_data.slice(i, i + PY_CHUNK_SIZE).map(b => `0x${b.toString(16).padStart(2, '0')}`).join(', ') + ',\n';
+                    }
+                    pyCode = pyCode.slice(0, -2) + '\n';
                 }
                 pyCode += `]\n`;
                 return pyCode;
+            }
             
             case 'hex':
                 return `--- WIDTHS ---\n${widths.map(w => w.toString(16).padStart(2, '0').toUpperCase()).join(' ')}\n\n--- OFFSETS ---\n${offsets.map(o => o.toString(16).padStart(4, '0').toUpperCase()).join(' ')}\n\n--- DATA ---\n${font_data.map(b => b.toString(16).padStart(2, '0').toUpperCase()).join(' ')}`;
@@ -113,7 +220,7 @@ const CodeOutput: React.FC<CodeOutputProps> = ({ fontData, options }) => {
             cCode += `const unsigned char ${fontName}[] = {\n`;
             fontData.forEach(charData => {
                 const hexBytes = charData.bytes.map(b => `0x${b.toString(16).padStart(2, '0').toUpperCase()}`).join(', ');
-                cCode += `  /* Char '${charData.char.replace(/'/g, "\\'").replace(/\\/g, "\\\\")}' (ASCII: ${charData.ascii}) */\n`;
+                cCode += `  /* Char '${charData.char.replace(/'/g, "\\'").replace(/\\/g, "\\\\")}' (Code: ${charData.codePoint}) */\n`;
                 cCode += `  ${hexBytes},\n`;
             });
             cCode += `};\n`;
@@ -124,7 +231,7 @@ const CodeOutput: React.FC<CodeOutputProps> = ({ fontData, options }) => {
             pyCode += `${fontName} = [\n`;
             fontData.forEach(charData => {
                 const hexBytes = charData.bytes.map(b => `0x${b.toString(16).padStart(2, '0')}`).join(', ');
-                pyCode += `  # Char '${charData.char.replace(/'/g, "\\'").replace(/\\/g, "\\\\")}' (ASCII: ${charData.ascii})\n`;
+                pyCode += `  # Char '${charData.char.replace(/'/g, "\\'").replace(/\\/g, "\\\\")}' (Code: ${charData.codePoint})\n`;
                 pyCode += `  ${hexBytes},\n`;
             });
             pyCode += `]\n`;
