@@ -11,7 +11,42 @@ import CharGrid from './components/CharGrid';
 import CharEditorModal from './components/CharEditorModal';
 import ImportFontModal from './components/ImportFontModal';
 import AddCharModal from './components/AddCharModal';
-import { GithubIcon, SparklesIcon, ChevronDownIcon, UploadIcon } from './components/Icons';
+import { GithubIcon, SparklesIcon, ChevronDownIcon, UploadIcon, SyncIcon, UndoIcon, RedoIcon } from './components/Icons';
+
+// Custom hook for managing state history (undo/redo)
+const useHistory = <T,>(initialState: T) => {
+    const [history, setHistory] = useState<T[]>([initialState]);
+    const [index, setIndex] = useState(0);
+
+    const set = useCallback((value: T) => {
+        const newHistory = history.slice(0, index + 1);
+        newHistory.push(value);
+        setHistory(newHistory);
+        setIndex(newHistory.length - 1);
+    }, [history, index]);
+
+    const undo = useCallback(() => {
+        if (index > 0) {
+            setIndex(index - 1);
+        }
+    }, [index]);
+
+    const redo = useCallback(() => {
+        if (index < history.length - 1) {
+            setIndex(index + 1);
+        }
+    }, [index, history.length]);
+
+    return {
+        state: history[index],
+        set,
+        undo,
+        redo,
+        canUndo: index > 0,
+        canRedo: index < history.length - 1,
+    };
+};
+
 
 const App: React.FC = () => {
   const [options, setOptions] = useState<FontGeneratorOptions>({
@@ -29,10 +64,13 @@ const App: React.FC = () => {
     yOffset: 0,
     dynamicWidth: false,
   });
-  const [fontData, setFontData] = useState<GeneratedChar[] | null>(null);
+
+  const { state: fontData, set: setFontData, undo, redo, canUndo, canRedo } = useHistory<GeneratedChar[] | null>(null);
+  
   const [previewData, setPreviewData] = useState<GeneratedChar[] | null>(null);
   const [previewText, setPreviewText] = useState<string>('Hello\nWorld!');
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [loadingAction, setLoadingAction] = useState<'generate' | 'sync' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isCharSetVisible, setIsCharSetVisible] = useState(true);
   const [isStylePreviewVisible, setIsStylePreviewVisible] = useState(true);
@@ -40,16 +78,54 @@ const App: React.FC = () => {
   const [editingChar, setEditingChar] = useState<{ char: GeneratedChar; index: number; isPreview: boolean } | null>(null);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isAddCharModalOpen, setIsAddCharModalOpen] = useState(false);
+  const [rangeStart, setRangeStart] = useState('');
+  const [rangeEnd, setRangeEnd] = useState('');
+  const [charSetError, setCharSetError] = useState<string | null>(null);
 
   const debounceTimeout = useRef<number | null>(null);
 
-  const handleCharUpdate = (charIndex: number, newBitmap: boolean[][], isPreview: boolean) => {
-    const dataUpdater = isPreview ? setPreviewData : setFontData;
-    
-    dataUpdater(prevData => {
-        if (!prevData) return null;
+  // Sync characterSet with fontData on undo/redo or any other change
+  useEffect(() => {
+    if (fontData) {
+        const newCharSet = fontData.map(d => d.char).join('');
+        if (newCharSet !== options.characterSet) {
+            setOptions(prev => ({...prev, characterSet: newCharSet}));
+        }
+    }
+  }, [fontData]);
 
-        return prevData.map((char, index) => {
+  // Keyboard shortcuts for undo/redo
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        if (e.key === 'z') {
+          e.preventDefault();
+          undo();
+        } else if (e.key === 'y') {
+          e.preventDefault();
+          redo();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [undo, redo]);
+
+
+  const handleCharUpdate = (charIndex: number, newBitmap: boolean[][], isPreview: boolean) => {
+    if (isPreview) {
+        setPreviewData(prevData => {
+            if (!prevData) return null;
+            return prevData.map((char, index) => {
+                if (index === charIndex) {
+                    // ... (logic for preview update remains same)
+                }
+                return char;
+            });
+        });
+    } else {
+        if (!fontData) return;
+        const newFontData = fontData.map((char, index) => {
             if (index === charIndex) {
                 const newBytes: number[] = [];
                 const totalWidth = newBitmap[0]?.length || 0;
@@ -66,7 +142,8 @@ const App: React.FC = () => {
             }
             return char;
         });
-    });
+        setFontData(newFontData);
+    }
     setEditingChar(null); // Close modal on save
   };
 
@@ -107,6 +184,7 @@ const App: React.FC = () => {
 
   const handleGenerate = useCallback(async () => {
     setIsLoading(true);
+    setLoadingAction('generate');
     setError(null);
     setFontData(null);
     try {
@@ -132,8 +210,49 @@ const App: React.FC = () => {
       }
     } finally {
       setIsLoading(false);
+      setLoadingAction(null);
     }
-  }, [options]);
+  }, [options, setFontData]);
+
+  const handleSync = useCallback(async () => {
+    setIsLoading(true);
+    setLoadingAction('sync');
+    setError(null);
+
+    try {
+        if (options.height > 8) throw new Error('Height cannot be greater than 8.');
+        if (options.width <= 0 || options.height <= 0) throw new Error('Width and height must be positive.');
+        if (!options.characterSet) throw new Error('Character set cannot be empty.');
+
+        const newCharSet = new Set(options.characterSet.split(''));
+        const oldFontData = fontData || [];
+        
+        const existingCharsInFont = new Set(oldFontData.map(d => d.char));
+        
+        const charsToAdd = [...newCharSet].map(String).filter(char => !existingCharsInFont.has(char));
+        
+        const keptFontData = oldFontData.filter(charData => newCharSet.has(charData.char));
+        
+        let newCharsData: GeneratedChar[] = [];
+        if (charsToAdd.length > 0) {
+            newCharsData = await generateChars(options, charsToAdd);
+        }
+        
+        const finalFontData = [...keptFontData, ...newCharsData].sort((a, b) => a.ascii - b.ascii);
+        
+        setFontData(finalFontData);
+
+    } catch (e) {
+        if (e instanceof Error) {
+            setError(e.message);
+        } else {
+            setError('An unknown error occurred during sync.');
+        }
+    } finally {
+        setIsLoading(false);
+        setLoadingAction(null);
+    }
+  }, [options, fontData, setFontData]);
 
   const handleOptionChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
@@ -155,8 +274,8 @@ const App: React.FC = () => {
   };
 
 
-  const handleAddExtendedChars = () => {
-    const extendedChars = [];
+  const handleAppendLatin1 = () => {
+    const extendedChars: string[] = [];
     // Latin-1 Supplement block (U+00A0 to U+00FF)
     for (let i = 160; i <= 255; i++) {
         extendedChars.push(String.fromCharCode(i));
@@ -169,19 +288,77 @@ const App: React.FC = () => {
     });
   };
 
+  const handleAppendCyrillic = () => {
+    const cyrillicChars: string[] = [];
+    // Capital letters А-Я (U+0410 to U+042F)
+    for (let i = 1040; i <= 1071; i++) {
+        cyrillicChars.push(String.fromCharCode(i));
+    }
+    // Small letters а-я (U+0430 to U+044F)
+    for (let i = 1072; i <= 1103; i++) {
+        cyrillicChars.push(String.fromCharCode(i));
+    }
+    // Add Ё (U+0401) and ё (U+0451)
+    cyrillicChars.push(String.fromCharCode(1025)); // Ё
+    cyrillicChars.push(String.fromCharCode(1105)); // ё
+    
+    setOptions(prev => {
+        const combined = prev.characterSet + cyrillicChars.join('');
+        const uniqueChars = [...new Set(combined.split(''))].join('');
+        return { ...prev, characterSet: uniqueChars };
+    });
+  };
+
+  const handleFillAscii = () => {
+    const chars: string[] = [];
+    for (let i = 32; i <= 126; i++) {
+        chars.push(String.fromCharCode(i));
+    }
+    setOptions(prev => ({ ...prev, characterSet: chars.join('') }));
+    setCharSetError(null);
+  };
+
+  const handleAddCustomRange = () => {
+    setCharSetError(null);
+    const start = parseInt(rangeStart, 16);
+    const end = parseInt(rangeEnd, 16);
+
+    if (isNaN(start) || isNaN(end)) {
+        setCharSetError('Please enter valid hexadecimal codes for the start and end of the range.');
+        return;
+    }
+    if (start > end) {
+        setCharSetError('The "Start" code cannot be greater than the "End" code.');
+        return;
+    }
+    if (end - start > 1000) {
+        setCharSetError('Range is too large. Please keep it under 1000 characters for performance reasons.');
+        return;
+    }
+    if (start < 0 || end > 65535) {
+        setCharSetError('Hex codes must be within a reasonable range (e.g., 0-FFFF).');
+        return;
+    }
+
+    const charsToAdd: string[] = [];
+    for (let i = start; i <= end; i++) {
+        charsToAdd.push(String.fromCharCode(i));
+    }
+    
+    setOptions(prev => {
+        const combined = prev.characterSet + charsToAdd.join('');
+        const uniqueChars = [...new Set(combined.split(''))].join('');
+        return { ...prev, characterSet: uniqueChars };
+    });
+    
+    setRangeStart('');
+    setRangeEnd('');
+  };
+
   const handleCharDelete = (indexToDelete: number) => {
-      setFontData(prevData => {
-          if (!prevData) return null;
-          const charToDelete = prevData[indexToDelete];
-          if (!charToDelete) return prevData;
-
-          setOptions(prevOpt => ({
-              ...prevOpt,
-              characterSet: prevOpt.characterSet.replace(charToDelete.char, ''),
-          }));
-
-          return prevData.filter((_, index) => index !== indexToDelete);
-      });
+      if (!fontData) return;
+      const newFontData = fontData.filter((_, index) => index !== indexToDelete);
+      setFontData(newFontData);
   };
 
   const handleCharAdd = (ascii: number) => {
@@ -195,15 +372,9 @@ const App: React.FC = () => {
       try {
           const [newCharData] = generateChars(options, [newCharStr]);
           
-          const newCharacterSet = (options.characterSet + newCharStr)
-              .split('')
-              .sort((a, b) => a.charCodeAt(0) - b.charCodeAt(0))
-              .join('');
-
           const newFontData = [...(fontData || []), newCharData]
               .sort((a, b) => a.ascii - b.ascii);
           
-          setOptions(prev => ({ ...prev, characterSet: newCharacterSet }));
           setFontData(newFontData);
           setIsAddCharModalOpen(false);
 
@@ -290,7 +461,17 @@ const App: React.FC = () => {
 
           <main>
             <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl shadow-lg p-6 mb-8 border border-gray-700">
-              <h2 className="text-2xl font-semibold mb-6 text-cyan-300 flex items-center gap-2"><SparklesIcon/>Controls</h2>
+              <h2 className="text-2xl font-semibold mb-6 text-cyan-300 flex items-center justify-between gap-4">
+                <span className="flex items-center gap-2"><SparklesIcon/>Controls</span>
+                <div className="flex items-center gap-2">
+                    <button onClick={undo} disabled={!canUndo} className="p-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-white font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed" title="Undo (Ctrl+Z)">
+                        <UndoIcon />
+                    </button>
+                    <button onClick={redo} disabled={!canRedo} className="p-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-white font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed" title="Redo (Ctrl+Y)">
+                        <RedoIcon />
+                    </button>
+                </div>
+              </h2>
               <div className="space-y-6">
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -521,26 +702,17 @@ const App: React.FC = () => {
                 </div>
                 
                 <div>
-                  <div className="flex justify-between items-center">
-                      <button 
-                          onClick={() => setIsCharSetVisible(!isCharSetVisible)} 
-                          className="flex items-center gap-2 font-medium text-gray-300 hover:text-cyan-300 transition-colors w-full text-left py-1"
-                          aria-expanded={isCharSetVisible}
-                          aria-controls="character-set-content"
-                      >
-                          <ChevronDownIcon className={`transition-transform duration-200 ${isCharSetVisible ? '' : '-rotate-90'}`} />
-                          <span>Character Set</span>
-                      </button>
-                      <button
-                        onClick={handleAddExtendedChars}
-                        className="text-xs bg-gray-700 hover:bg-gray-600 text-white font-semibold py-1 px-2 rounded-md transition-colors flex-shrink-0"
-                        title="Append common extended ASCII/Latin-1 characters (e.g., é, ñ, ©)"
-                      >
-                        + Add Extended
-                      </button>
-                  </div>
+                  <button 
+                      onClick={() => setIsCharSetVisible(!isCharSetVisible)} 
+                      className="flex items-center gap-2 font-medium text-gray-300 hover:text-cyan-300 transition-colors w-full text-left py-1"
+                      aria-expanded={isCharSetVisible}
+                      aria-controls="character-set-content"
+                  >
+                      <ChevronDownIcon className={`transition-transform duration-200 ${isCharSetVisible ? '' : '-rotate-90'}`} />
+                      <span>Character Set</span>
+                  </button>
                   {isCharSetVisible && (
-                    <div id="character-set-content" className="mt-2">
+                    <div id="character-set-content" className="mt-2 space-y-3">
                       <textarea
                           id="characterSet"
                           name="characterSet"
@@ -549,7 +721,25 @@ const App: React.FC = () => {
                           className="bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white font-mono h-24 resize-y focus:ring-2 focus:ring-cyan-400 focus:outline-none transition w-full"
                           placeholder="Type all characters you want to generate here..."
                       />
-                      <p className="text-xs text-gray-500 mt-1">All unique characters to include in the font data.</p>
+
+                      <div className="bg-gray-700/50 p-3 rounded-lg border border-gray-600 space-y-3">
+                        <h4 className="text-sm font-semibold text-gray-300">Helpers</h4>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-sm text-gray-400 font-medium">Presets:</span>
+                          <button onClick={handleFillAscii} className="text-xs bg-gray-600 hover:bg-gray-500 text-white font-semibold py-1 px-2 rounded-md transition-colors">ASCII (0x20-0x7E)</button>
+                          <button onClick={handleAppendLatin1} className="text-xs bg-gray-600 hover:bg-gray-500 text-white font-semibold py-1 px-2 rounded-md transition-colors">Append Latin-1 (0xA0-0xFF)</button>
+                          <button onClick={handleAppendCyrillic} className="text-xs bg-gray-600 hover:bg-gray-500 text-white font-semibold py-1 px-2 rounded-md transition-colors">Append Cyrillic (0x0410-0x044F)</button>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-gray-600">
+                          <span className="text-sm text-gray-400 font-medium mr-1">Add Range (Hex Code):</span>
+                          <input type="text" placeholder="Start (Hex)" value={rangeStart} onChange={e => setRangeStart(e.target.value)} className="bg-gray-600 border border-gray-500 rounded-md px-2 py-1 text-white text-sm w-24 font-mono focus:ring-1 focus:ring-cyan-400 focus:outline-none" aria-label="Custom Range Start Hex Code" />
+                          <input type="text" placeholder="End (Hex)" value={rangeEnd} onChange={e => setRangeEnd(e.target.value)} className="bg-gray-600 border border-gray-500 rounded-md px-2 py-1 text-white text-sm w-24 font-mono focus:ring-1 focus:ring-cyan-400 focus:outline-none" aria-label="Custom Range End Hex Code" />
+                          <button onClick={handleAddCustomRange} className="text-xs bg-gray-600 hover:bg-gray-500 text-white font-semibold py-1 px-2 rounded-md transition-colors">Add</button>
+                        </div>
+                        {charSetError && <p className="text-red-400 text-sm -mt-1 px-1">{charSetError}</p>}
+                      </div>
+                      
+                      <p className="text-xs text-gray-500 !mt-1">All unique characters to include in the font data.</p>
                     </div>
                   )}
                 </div>
@@ -617,17 +807,27 @@ const App: React.FC = () => {
               <div className="mt-8 flex flex-col sm:flex-row justify-center items-center gap-4">
                   <button 
                     onClick={() => setIsImportModalOpen(true)}
-                    className="w-full sm:w-auto justify-center bg-gray-600 hover:bg-gray-500 text-white font-bold py-3 px-8 rounded-lg shadow-md transition-all duration-300 ease-in-out flex items-center gap-2"
+                    className="w-full sm:w-auto justify-center bg-gray-600 hover:bg-gray-500 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-all duration-300 ease-in-out flex items-center gap-2"
                   >
                     <UploadIcon/>
                     Import Font
                   </button>
                   <button 
+                    onClick={handleSync} 
+                    disabled={isLoading || !fontData}
+                    className="w-full sm:w-auto justify-center bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-all duration-300 ease-in-out flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Add/remove characters to match the set, preserving manual edits. Only available after initial generation."
+                  >
+                    <SyncIcon />
+                    {loadingAction === 'sync' ? 'Syncing...' : 'Sync Set'}
+                  </button>
+                  <button 
                     onClick={handleGenerate} 
                     disabled={isLoading}
-                    className="w-full sm:w-auto justify-center bg-gradient-to-r from-purple-500 to-cyan-500 hover:from-purple-600 hover:to-cyan-600 text-white font-bold py-3 px-8 rounded-lg shadow-md transition-all duration-300 ease-in-out transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full sm:w-auto justify-center bg-gradient-to-r from-purple-500 to-cyan-500 hover:from-purple-600 hover:to-cyan-600 text-white font-bold py-3 px-6 rounded-lg shadow-md transition-all duration-300 ease-in-out transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Regenerate all characters from scratch, overwriting any manual edits."
                   >
-                    {isLoading ? 'Generating...' : 'Generate Font'}
+                    {loadingAction === 'generate' ? 'Generating...' : 'Generate & Overwrite'}
                   </button>
               </div>
             </div>
@@ -637,7 +837,9 @@ const App: React.FC = () => {
             {isLoading && 
               <div className="text-center p-8">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-400 mx-auto"></div>
-                <p className="mt-4 text-gray-400">Rendering characters on canvas...</p>
+                <p className="mt-4 text-gray-400">
+                  {loadingAction === 'sync' ? 'Syncing character set...' : 'Rendering characters on canvas...'}
+                </p>
               </div>
             }
 

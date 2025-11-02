@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import type { ParsedFontData, GeneratedChar } from '../types';
 import { parseImportedData, parseArrayString } from '../services/fontParser';
@@ -136,7 +137,7 @@ const ImportFontModal: React.FC<ImportFontModalProps> = ({ onClose, onImport }) 
   const [rawData, setRawData] = useState('');
   const [rawWidths, setRawWidths] = useState('');
   const [rawOffsets, setRawOffsets] = useState('');
-  const [startAscii, setStartAscii] = useState('32');
+  const [startAscii, setStartAscii] = useState('20');
   const [error, setError] = useState<string | null>(null);
 
   // State for adding custom range
@@ -248,16 +249,41 @@ const ImportFontModal: React.FC<ImportFontModalProps> = ({ onClose, onImport }) 
     for (let i = 160; i <= 255; i++) {
         chars.push(String.fromCharCode(i));
     }
-    setCharacterSet(prev => prev + chars.join(''));
+    setCharacterSet(prev => {
+        const combined = prev + chars.join('');
+        const uniqueChars = [...new Set(combined.split(''))].join('');
+        return uniqueChars;
+    });
+  };
+
+  const handleAppendCyrillic = () => {
+    const cyrillicChars = [];
+    // Capital letters А-Я (U+0410 to U+042F)
+    for (let i = 1040; i <= 1071; i++) {
+        cyrillicChars.push(String.fromCharCode(i));
+    }
+    // Small letters а-я (U+0430 to U+044F)
+    for (let i = 1072; i <= 1103; i++) {
+        cyrillicChars.push(String.fromCharCode(i));
+    }
+    // Add Ё (U+0401) and ё (U+0451)
+    cyrillicChars.push(String.fromCharCode(1025)); // Ё
+    cyrillicChars.push(String.fromCharCode(1105)); // ё
+    
+    setCharacterSet(prev => {
+        const combined = prev + cyrillicChars.join('');
+        const uniqueChars = [...new Set(combined.split(''))].join('');
+        return uniqueChars;
+    });
   };
   
   const handleAddCustomRange = () => {
     setError(null);
-    const start = parseInt(rangeStart, 10);
-    const end = parseInt(rangeEnd, 10);
+    const start = parseInt(rangeStart, 16);
+    const end = parseInt(rangeEnd, 16);
 
     if (isNaN(start) || isNaN(end)) {
-        setError('Please enter valid numbers for the start and end of the range.');
+        setError('Please enter valid hexadecimal codes for the start and end of the range.');
         return;
     }
 
@@ -286,9 +312,9 @@ const ImportFontModal: React.FC<ImportFontModalProps> = ({ onClose, onImport }) 
   const handleGenerateFromAscii = () => {
     setError(null);
     try {
-        const startCode = parseInt(startAscii, 10);
+        const startCode = parseInt(startAscii, 16);
         if (isNaN(startCode)) {
-            throw new Error('Invalid "Start ASCII Code". Please enter a valid number.');
+            throw new Error('Invalid "Start Hex Code". Please enter a valid hex number.');
         }
 
         let numChars = 0;
@@ -342,7 +368,7 @@ const ImportFontModal: React.FC<ImportFontModalProps> = ({ onClose, onImport }) 
     const fieldsetClasses = "border border-gray-600 rounded-xl p-4";
     const legendClasses = "text-cyan-300 font-semibold px-2 text-lg";
     const stepNumberClasses = "text-gray-500 mr-2 font-normal";
-    const smallInputClasses = "bg-gray-600 border border-gray-500 rounded-md px-2 py-1 text-white text-sm w-20 focus:ring-1 focus:ring-cyan-400 focus:outline-none";
+    const smallInputClasses = "bg-gray-600 border border-gray-500 rounded-md px-2 py-1 text-white text-sm focus:ring-1 focus:ring-cyan-400 focus:outline-none";
     const helperButtonClasses = "text-xs bg-gray-600 hover:bg-gray-500 text-white font-semibold py-1 px-2 rounded-md transition-colors";
 
     return (
@@ -395,21 +421,22 @@ const ImportFontModal: React.FC<ImportFontModalProps> = ({ onClose, onImport }) 
               <h4 className="text-sm font-semibold text-gray-300">Helpers</h4>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-sm text-gray-400 font-medium">Presets:</span>
-                <button onClick={handleFillAscii} className={helperButtonClasses}>ASCII (32-126)</button>
-                <button onClick={handleAppendLatin1} className={helperButtonClasses}>+ Latin-1 Ext (160-255)</button>
+                <button onClick={handleFillAscii} className={helperButtonClasses}>ASCII (0x20-0x7E)</button>
+                <button onClick={handleAppendLatin1} className={helperButtonClasses}>+ Latin-1 (0xA0-0xFF)</button>
+                <button onClick={handleAppendCyrillic} className={helperButtonClasses}>+ Cyrillic (0x0410-0x044F)</button>
               </div>
               <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-gray-600">
-                <span className="text-sm text-gray-400 font-medium mr-1">Add Range:</span>
-                <input type="number" placeholder="Start" value={rangeStart} onChange={e => setRangeStart(e.target.value)} className={smallInputClasses} aria-label="Custom Range Start ASCII Code" />
-                <input type="number" placeholder="End" value={rangeEnd} onChange={e => setRangeEnd(e.target.value)} className={smallInputClasses} aria-label="Custom Range End ASCII Code" />
+                <span className="text-sm text-gray-400 font-medium mr-1">Add Range (Hex):</span>
+                <input type="text" placeholder="Start (Hex)" value={rangeStart} onChange={e => setRangeStart(e.target.value)} className={`${smallInputClasses} font-mono w-24`} aria-label="Custom Range Start Hex Code" />
+                <input type="text" placeholder="End (Hex)" value={rangeEnd} onChange={e => setRangeEnd(e.target.value)} className={`${smallInputClasses} font-mono w-24`} aria-label="Custom Range End Hex Code" />
                 <button onClick={handleAddCustomRange} className={helperButtonClasses}>Add</button>
               </div>
               <div className="pt-2 border-t border-gray-600">
                 <p className="text-sm font-semibold text-gray-300">Generate from Data</p>
                 <p className="text-xs text-gray-400 mb-2">Calculates the character set from your pasted arrays in Step 2.</p>
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-sm text-gray-400 font-medium mr-1">Start ASCII:</span>
-                  <input type="number" value={startAscii} onChange={e => setStartAscii(e.target.value)} className={smallInputClasses} aria-label="Starting ASCII Code" />
+                  <span className="text-sm text-gray-400 font-medium mr-1">Start Hex Code:</span>
+                  <input type="text" value={startAscii} onChange={e => setStartAscii(e.target.value)} className={`${smallInputClasses} font-mono w-24`} aria-label="Starting Hex Code" />
                   <button onClick={handleGenerateFromAscii} className="text-xs bg-cyan-600 hover:bg-cyan-500 text-white font-semibold py-1 px-2 rounded-md transition-colors">Generate Set</button>
                 </div>
               </div>
