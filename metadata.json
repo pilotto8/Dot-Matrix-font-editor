@@ -1,0 +1,5 @@
+{
+  "name": "Dot Matrix Font Generator",
+  "description": "An application to select a font, define dot matrix display dimensions, and generate a C-style byte array for the font with a visual preview. Each byte represents a column, with the MSB as the top row.",
+  "requestFramePermissions": []
+}
