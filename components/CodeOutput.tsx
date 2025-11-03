@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback } from 'react';
 import type { GeneratedChar, FontGeneratorOptions } from '../types';
 import { CodeIcon, ClipboardCheckIcon, ClipboardIcon } from './Icons';
@@ -40,13 +39,64 @@ const CodeOutput: React.FC<CodeOutputProps> = ({ fontData, options }) => {
   const generateCode = useCallback(() => {
     const { fontFamily, width, height, charSpacing, characterSet, dynamicWidth } = options;
     const fontName = `font_${fontFamily.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '')}_${width}x${height}`;
+
+    // --- Generate Character Mapping Guide ---
+    const blocks: {startCp: number, endCp: number, startIndex: number}[] = [];
+    if (fontData.length > 0) {
+        let currentBlock = {
+            startCp: fontData[0].codePoint,
+            endCp: fontData[0].codePoint,
+            startIndex: 0,
+        };
+        for (let i = 1; i < fontData.length; i++) {
+            if (fontData[i].codePoint === fontData[i-1].codePoint + 1) {
+                currentBlock.endCp = fontData[i].codePoint;
+            } else {
+                blocks.push(currentBlock);
+                currentBlock = {
+                    startCp: fontData[i].codePoint,
+                    endCp: fontData[i].codePoint,
+                    startIndex: i,
+                };
+            }
+        }
+        blocks.push(currentBlock);
+    }
+
+    const mappingGuideLines: string[] = [];
+    if (blocks.length > 0) {
+        mappingGuideLines.push('Character Mapping Guide');
+        mappingGuideLines.push('-----------------------');
+        mappingGuideLines.push("To find a character's index, use its UTF-8 code point and the formula below.");
+        mappingGuideLines.push('');
+        
+        blocks.forEach(block => {
+            const offset = block.startCp - block.startIndex;
+            const startHex = `0x${block.startCp.toString(16).toUpperCase()}`;
+            const endHex = `0x${block.endCp.toString(16).toUpperCase()}`;
+            const offsetHex = `0x${offset.toString(16).toUpperCase()}`;
+            const charCount = block.endCp - block.startCp + 1;
+            
+            mappingGuideLines.push(`Range: [${startHex} - ${endHex}] (${charCount} chars) --> index = utf8_code - ${offsetHex}`);
+        });
+    }
+
+    const formatMappingGuide = (lang: 'c' | 'python') => {
+        if (mappingGuideLines.length === 0) return '';
+        if (lang === 'c') {
+            return '/*\n' + mappingGuideLines.map(line => ` * ${line}`).join('\n') + '\n */\n\n';
+        } else { // python
+            return mappingGuideLines.map(line => `# ${line}`).join('\n') + '\n\n';
+        }
+    };
+
     
     if (dynamicWidth) {
-        let header = `// Font: ${fontFamily}, Size: Up to ${width}x${height} (Dynamic Width)\n`;
-        header += `// Characters: "${characterSet.replace(/\n/g, "\\n")}"\n`;
-        header += `// To render a character, get its width from ${fontName}_widths[],\n`;
-        header += `// its offset from ${fontName}_offsets[], and then read the bytes\n`;
-        header += `// from ${fontName}_data[] starting at that offset.\n`;
+        let baseHeaderC = `// Font: ${fontFamily}, Size: Up to ${width}x${height} (Dynamic Width)\n`;
+        baseHeaderC += `// Characters: "${characterSet.replace(/\n/g, "\\n")}"\n`;
+        baseHeaderC += `// To render a character, get its width from ${fontName}_widths[],\n`;
+        baseHeaderC += `// its offset from ${fontName}_offsets[], and then read the bytes\n`;
+        baseHeaderC += `// from ${fontName}_data[] starting at that offset.\n`;
 
         const widths: number[] = [];
         const offsets: number[] = [];
@@ -90,7 +140,7 @@ const CodeOutput: React.FC<CodeOutputProps> = ({ fontData, options }) => {
 
         switch (outputFormat) {
             case 'c': {
-                let cCode = header + `\n`;
+                let cCode = formatMappingGuide('c') + baseHeaderC + `\n`;
                 const CHUNK_SIZE = 16;
         
                 const formatRangeComment = (range: typeof ranges[0]) => {
@@ -148,7 +198,7 @@ const CodeOutput: React.FC<CodeOutputProps> = ({ fontData, options }) => {
             }
 
             case 'python': {
-                let pyCode = header.replace(/\/\//g, '#') + `\n`;
+                let pyCode = formatMappingGuide('python') + baseHeaderC.replace(/\/\//g, '#') + `\n`;
                 const PY_CHUNK_SIZE = 16;
         
                 const formatRangeComment = (range: typeof ranges[0]) => {
@@ -211,12 +261,11 @@ const CodeOutput: React.FC<CodeOutputProps> = ({ fontData, options }) => {
     }
 
 
-    let header = `// Font: ${fontFamily}, Size: ${width}x${height} (+${charSpacing}px spacing)\n`;
-    header += `// Characters: "${characterSet.replace(/\n/g, "\\n")}"\n`;
+    const baseHeaderC = `// Font: ${fontFamily}, Size: ${width}x${height} (+${charSpacing}px spacing)\n// Characters: "${characterSet.replace(/\n/g, "\\n")}"\n`;
 
     switch (outputFormat) {
         case 'c':
-            let cCode = header + `// Each byte represents a column, with the MSB as the top row.\n`;
+            let cCode = formatMappingGuide('c') + baseHeaderC + `// Each byte represents a column, with the MSB as the top row.\n`;
             cCode += `const unsigned char ${fontName}[] = {\n`;
             fontData.forEach(charData => {
                 const hexBytes = charData.bytes.map(b => `0x${b.toString(16).padStart(2, '0').toUpperCase()}`).join(', ');
@@ -227,7 +276,7 @@ const CodeOutput: React.FC<CodeOutputProps> = ({ fontData, options }) => {
             return cCode;
 
         case 'python':
-            let pyCode = header.replace(/\/\//g, '#') + `# Each byte represents a column, with the MSB as the top row.\n`;
+            let pyCode = formatMappingGuide('python') + baseHeaderC.replace(/\/\//g, '#') + `# Each byte represents a column, with the MSB as the top row.\n`;
             pyCode += `${fontName} = [\n`;
             fontData.forEach(charData => {
                 const hexBytes = charData.bytes.map(b => `0x${b.toString(16).padStart(2, '0')}`).join(', ');

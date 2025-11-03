@@ -228,7 +228,9 @@ const App: React.FC = () => {
         
         const existingCharsInFont = new Set(oldFontData.map(d => d.char));
         
-        const charsToAdd = [...newCharSet].filter(char => !existingCharsInFont.has(char));
+        // Fix: Use Array.from for better type inference over spread operator to ensure 'charsToAdd' is string[].
+        // Fix: The result of Array.from was being inferred as unknown[], causing a type error. Casting to string[] resolves this.
+        const charsToAdd = (Array.from(newCharSet) as string[]).filter((char) => !existingCharsInFont.has(char));
         
         const keptFontData = oldFontData.filter(charData => newCharSet.has(charData.char));
         
@@ -260,7 +262,8 @@ const App: React.FC = () => {
         setOptions(prev => ({ ...prev, [name]: checked }));
     } else if (name === 'characterSet') {
         const uniqueChars = [...new Set(Array.from(value))];
-        uniqueChars.sort((a, b) => (a.codePointAt(0) ?? 0) - (b.codePointAt(0) ?? 0));
+        // Fix: Explicitly type 'a' and 'b' as strings to resolve TS error on 'codePointAt'.
+        uniqueChars.sort((a: string, b: string) => (a.codePointAt(0) ?? 0) - (b.codePointAt(0) ?? 0));
         setOptions(prev => ({ ...prev, [name]: uniqueChars.join('') }));
     } else {
         const isNumeric = ['width', 'height', 'fontSizeAdjustment', 'renderThreshold', 'charSpacing', 'xOffset', 'yOffset'].includes(name);
@@ -276,6 +279,25 @@ const App: React.FC = () => {
     setIsImportModalOpen(false);
   };
 
+  const handleSetLatinBasic = () => {
+    const chars: string[] = [];
+    
+    // 1. Basic Latin (ASCII) (U+0020 to U+007E)
+    for (let i = 0x20; i <= 0x7E; i++) {
+        chars.push(String.fromCodePoint(i));
+    }
+    
+    // 2. Latin-1 Supplement (U+00A0 to U+00FF)
+    for (let i = 0xA0; i <= 0xFF; i++) {
+        chars.push(String.fromCodePoint(i));
+    }
+        
+    // It's a preset, so it replaces the current content.
+    const uniqueChars = [...new Set(chars)];
+    uniqueChars.sort((a: string, b: string) => (a.codePointAt(0) ?? 0) - (b.codePointAt(0) ?? 0));
+    setOptions(prev => ({ ...prev, characterSet: uniqueChars.join('') }));
+    setCharSetError(null);
+  };
 
   const handleAppendLatin1 = () => {
     const extendedChars: string[] = [];
@@ -287,29 +309,64 @@ const App: React.FC = () => {
     setOptions(prev => {
         const combined = prev.characterSet + extendedChars.join('');
         const uniqueChars = [...new Set(Array.from(combined))];
-        uniqueChars.sort((a, b) => (a.codePointAt(0) ?? 0) - (b.codePointAt(0) ?? 0));
+        // Fix: Explicitly type 'a' and 'b' as strings to resolve TS error on 'codePointAt'.
+        uniqueChars.sort((a: string, b: string) => (a.codePointAt(0) ?? 0) - (b.codePointAt(0) ?? 0));
+        return { ...prev, characterSet: uniqueChars.join('') };
+    });
+  };
+  
+  const handleAppendLatinExtendedA = () => {
+    const chars: string[] = [];
+    // Latin Extended-A (U+0100 to U+017F)
+    for (let i = 0x0100; i <= 0x017F; i++) {
+        chars.push(String.fromCodePoint(i));
+    }
+    setOptions(prev => {
+        const combined = prev.characterSet + chars.join('');
+        const uniqueChars = [...new Set(Array.from(combined))];
+        // Fix: Explicitly type 'a' and 'b' as strings to resolve TS error on 'codePointAt'.
+        uniqueChars.sort((a: string, b: string) => (a.codePointAt(0) ?? 0) - (b.codePointAt(0) ?? 0));
+        return { ...prev, characterSet: uniqueChars.join('') };
+    });
+  };
+
+  const handleAppendLatinExtendedB = () => {
+    const chars: string[] = [];
+    // Latin Extended-B block (U+0180 to U+024F)
+    for (let i = 0x0180; i <= 0x024F; i++) {
+        chars.push(String.fromCodePoint(i));
+    }
+    setOptions(prev => {
+        const combined = prev.characterSet + chars.join('');
+        const uniqueChars = [...new Set(Array.from(combined))];
+        // Fix: Explicitly type 'a' and 'b' as strings to resolve TS error on 'codePointAt'.
+        uniqueChars.sort((a: string, b: string) => (a.codePointAt(0) ?? 0) - (b.codePointAt(0) ?? 0));
+        return { ...prev, characterSet: uniqueChars.join('') };
+    });
+  };
+  
+  const handleAppendEuro = () => {
+    setOptions(prev => {
+        const combined = prev.characterSet + String.fromCodePoint(0x20AC);
+        const uniqueChars = [...new Set(Array.from(combined))];
+        // Fix: Explicitly type 'a' and 'b' as strings to resolve TS error on 'codePointAt'.
+        uniqueChars.sort((a: string, b: string) => (a.codePointAt(0) ?? 0) - (b.codePointAt(0) ?? 0));
         return { ...prev, characterSet: uniqueChars.join('') };
     });
   };
 
   const handleAppendCyrillic = () => {
     const cyrillicChars: string[] = [];
-    // Capital letters А-Я (U+0410 to U+042F)
-    for (let i = 1040; i <= 1071; i++) {
-        cyrillicChars.push(String.fromCharCode(i));
+    // Cyrillic block U+0400 to U+04FF.
+    for (let i = 0x0400; i <= 0x04FF; i++) {
+        cyrillicChars.push(String.fromCodePoint(i));
     }
-    // Small letters а-я (U+0430 to U+044F)
-    for (let i = 1072; i <= 1103; i++) {
-        cyrillicChars.push(String.fromCharCode(i));
-    }
-    // Add Ё (U+0401) and ё (U+0451)
-    cyrillicChars.push(String.fromCharCode(1025)); // Ё
-    cyrillicChars.push(String.fromCharCode(1105)); // ё
     
     setOptions(prev => {
         const combined = prev.characterSet + cyrillicChars.join('');
         const uniqueChars = [...new Set(Array.from(combined))];
-        uniqueChars.sort((a, b) => (a.codePointAt(0) ?? 0) - (b.codePointAt(0) ?? 0));
+        // Fix: Explicitly type 'a' and 'b' as strings to resolve TS error on 'codePointAt'.
+        uniqueChars.sort((a: string, b: string) => (a.codePointAt(0) ?? 0) - (b.codePointAt(0) ?? 0));
         return { ...prev, characterSet: uniqueChars.join('') };
     });
   };
@@ -320,6 +377,11 @@ const App: React.FC = () => {
         chars.push(String.fromCharCode(i));
     }
     setOptions(prev => ({ ...prev, characterSet: chars.join('') }));
+    setCharSetError(null);
+  };
+  
+  const handleSetEmpty = () => {
+    setOptions(prev => ({ ...prev, characterSet: '' }));
     setCharSetError(null);
   };
 
@@ -353,7 +415,8 @@ const App: React.FC = () => {
     setOptions(prev => {
         const combined = prev.characterSet + charsToAdd.join('');
         const uniqueChars = [...new Set(Array.from(combined))];
-        uniqueChars.sort((a, b) => (a.codePointAt(0) ?? 0) - (b.codePointAt(0) ?? 0));
+        // Fix: Explicitly type 'a' and 'b' as strings to resolve TS error on 'codePointAt'.
+        uniqueChars.sort((a: string, b: string) => (a.codePointAt(0) ?? 0) - (b.codePointAt(0) ?? 0));
         return { ...prev, characterSet: uniqueChars.join('') };
     });
     
@@ -735,9 +798,17 @@ const App: React.FC = () => {
                         <h4 className="text-sm font-semibold text-gray-300">Helpers</h4>
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="text-sm text-gray-400 font-medium">Presets:</span>
-                          <button onClick={handleFillAscii} className="text-xs bg-gray-600 hover:bg-gray-500 text-white font-semibold py-1 px-2 rounded-md transition-colors">ASCII (0x20-0x7E)</button>
-                          <button onClick={handleAppendLatin1} className="text-xs bg-gray-600 hover:bg-gray-500 text-white font-semibold py-1 px-2 rounded-md transition-colors">Append Latin-1 (0xA0-0xFF)</button>
-                          <button onClick={handleAppendCyrillic} className="text-xs bg-gray-600 hover:bg-gray-500 text-white font-semibold py-1 px-2 rounded-md transition-colors">Append Cyrillic (0x0410-0x044F)</button>
+                          <button onClick={handleSetEmpty} className="text-xs bg-gray-600 hover:bg-gray-500 text-white font-semibold py-1 px-2 rounded-md transition-colors" title="Clear the character set">Set Empty</button>
+                          <button onClick={handleFillAscii} className="text-xs bg-gray-600 hover:bg-gray-500 text-white font-semibold py-1 px-2 rounded-md transition-colors" title="Replace with U+0020-007E">Set ASCII</button>
+                          <button onClick={handleSetLatinBasic} className="text-xs bg-gray-600 hover:bg-gray-500 text-white font-semibold py-1 px-2 rounded-md transition-colors" title="Replace with ASCII and Latin-1 (U+0020-00FF)">Set Latin Basic</button>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-sm text-gray-400 font-medium">Append Blocks:</span>
+                            <button onClick={handleAppendLatin1} className="text-xs bg-gray-600 hover:bg-gray-500 text-white font-semibold py-1 px-2 rounded-md transition-colors" title="Add characters from U+00A0 to U+00FF">Latin-1</button>
+                            <button onClick={handleAppendLatinExtendedA} className="text-xs bg-gray-600 hover:bg-gray-500 text-white font-semibold py-1 px-2 rounded-md transition-colors" title="Add characters from U+0100 to U+017F">Latin-Ext-A</button>
+                            <button onClick={handleAppendLatinExtendedB} className="text-xs bg-gray-600 hover:bg-gray-500 text-white font-semibold py-1 px-2 rounded-md transition-colors" title="Add characters from U+0180 to U+024F">Latin-Ext-B</button>
+                            <button onClick={handleAppendCyrillic} className="text-xs bg-gray-600 hover:bg-gray-500 text-white font-semibold py-1 px-2 rounded-md transition-colors" title="Add characters from U+0400 to U+04FF">Cyrillic</button>
+                            <button onClick={handleAppendEuro} className="text-xs bg-gray-600 hover:bg-gray-500 text-white font-semibold py-1 px-2 rounded-md transition-colors" title="Add Euro Symbol (€) U+20AC">Euro (€)</button>
                         </div>
                         <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-gray-600">
                           <span className="text-sm text-gray-400 font-medium mr-1">Add Range (Hex Code):</span>

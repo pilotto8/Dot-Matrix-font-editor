@@ -256,20 +256,50 @@ const ImportFontModal: React.FC<ImportFontModalProps> = ({ onClose, onImport }) 
         return uniqueChars.join('');
     });
   };
+  
+  const handleAppendLatinExtendedA = () => {
+    const chars: string[] = [];
+    // Latin Extended-A (U+0100 to U+017F)
+    for (let i = 0x0100; i <= 0x017F; i++) {
+        chars.push(String.fromCodePoint(i));
+    }
+    setCharacterSet(prev => {
+        const combined = prev + chars.join('');
+        const uniqueChars = [...new Set(Array.from(combined))];
+        uniqueChars.sort((a, b) => (a.codePointAt(0) ?? 0) - (b.codePointAt(0) ?? 0));
+        return uniqueChars.join('');
+    });
+  };
+
+  const handleAppendLatinExtendedB = () => {
+    const chars: string[] = [];
+    // Latin Extended-B block (U+0180 to U+024F)
+    for (let i = 0x0180; i <= 0x024F; i++) {
+        chars.push(String.fromCodePoint(i));
+    }
+    setCharacterSet(prev => {
+        const combined = prev + chars.join('');
+        const uniqueChars = [...new Set(Array.from(combined))];
+        uniqueChars.sort((a, b) => (a.codePointAt(0) ?? 0) - (b.codePointAt(0) ?? 0));
+        return uniqueChars.join('');
+    });
+  };
+  
+  const handleAppendEuro = () => {
+     setCharacterSet(prev => {
+        const combined = prev + String.fromCodePoint(0x20AC);
+        const uniqueChars = [...new Set(Array.from(combined))];
+        uniqueChars.sort((a, b) => (a.codePointAt(0) ?? 0) - (b.codePointAt(0) ?? 0));
+        return uniqueChars.join('');
+    });
+  };
 
   const handleAppendCyrillic = () => {
-    const cyrillicChars = [];
-    // Capital letters А-Я (U+0410 to U+042F)
-    for (let i = 1040; i <= 1071; i++) {
-        cyrillicChars.push(String.fromCharCode(i));
+    const cyrillicChars: string[] = [];
+    // Cyrillic block U+0400 to U+04FF.
+    for (let i = 0x0400; i <= 0x04FF; i++) {
+        cyrillicChars.push(String.fromCodePoint(i));
     }
-    // Small letters а-я (U+0430 to U+044F)
-    for (let i = 1072; i <= 1103; i++) {
-        cyrillicChars.push(String.fromCharCode(i));
-    }
-    // Add Ё (U+0401) and ё (U+0451)
-    cyrillicChars.push(String.fromCharCode(1025)); // Ё
-    cyrillicChars.push(String.fromCharCode(1105)); // ё
     
     setCharacterSet(prev => {
         const combined = prev + cyrillicChars.join('');
@@ -307,6 +337,30 @@ const ImportFontModal: React.FC<ImportFontModalProps> = ({ onClose, onImport }) 
     
     setRangeStart('');
     setRangeEnd('');
+  };
+
+  const handleSetLatinBasic = () => {
+    const chars: string[] = [];
+    
+    // 1. Basic Latin (ASCII) (U+0020 to U+007E)
+    for (let i = 0x20; i <= 0x7E; i++) {
+        chars.push(String.fromCodePoint(i));
+    }
+    
+    // 2. Latin-1 Supplement (U+00A0 to U+00FF)
+    for (let i = 0xA0; i <= 0xFF; i++) {
+        chars.push(String.fromCodePoint(i));
+    }
+    
+    const uniqueChars = [...new Set(chars)];
+    uniqueChars.sort((a: string, b: string) => (a.codePointAt(0) ?? 0) - (b.codePointAt(0) ?? 0));
+    setCharacterSet(uniqueChars.join(''));
+    setError(null);
+  };
+  
+  const handleSetEmpty = () => {
+    setCharacterSet('');
+    setError(null);
   };
 
 
@@ -422,9 +476,17 @@ const ImportFontModal: React.FC<ImportFontModalProps> = ({ onClose, onImport }) 
               <h4 className="text-sm font-semibold text-gray-300">Helpers</h4>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-sm text-gray-400 font-medium">Presets:</span>
-                <button onClick={handleFillAscii} className={helperButtonClasses}>ASCII (0x20-0x7E)</button>
-                <button onClick={handleAppendLatin1} className={helperButtonClasses}>+ Latin-1 (0xA0-0xFF)</button>
-                <button onClick={handleAppendCyrillic} className={helperButtonClasses}>+ Cyrillic (0x0410-0x044F)</button>
+                <button onClick={handleSetEmpty} className={helperButtonClasses} title="Clear the character set">Set Empty</button>
+                <button onClick={handleFillAscii} className={helperButtonClasses} title="Replace with U+0020-007E">Set ASCII</button>
+                <button onClick={handleSetLatinBasic} className={helperButtonClasses} title="Replace with ASCII and Latin-1 (U+0020-00FF)">Set Latin Basic</button>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm text-gray-400 font-medium">Append Blocks:</span>
+                <button onClick={handleAppendLatin1} className={helperButtonClasses} title="Add characters from U+00A0 to U+00FF">Latin-1</button>
+                <button onClick={handleAppendLatinExtendedA} className={helperButtonClasses} title="Add characters from U+0100 to U+017F">Latin-Ext-A</button>
+                <button onClick={handleAppendLatinExtendedB} className={helperButtonClasses} title="Add characters from U+0180 to U+024F">Latin-Ext-B</button>
+                <button onClick={handleAppendCyrillic} className={helperButtonClasses} title="Add characters from U+0400 to U+04FF">Cyrillic</button>
+                <button onClick={handleAppendEuro} className={helperButtonClasses} title="Add Euro Symbol (€) U+20AC">Euro (€)</button>
               </div>
               <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-gray-600">
                 <span className="text-sm text-gray-400 font-medium mr-1">Add Range (Hex):</span>

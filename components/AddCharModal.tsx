@@ -29,7 +29,8 @@ const AddCharModal: React.FC<AddCharModalProps> = ({ onClose, onAdd, existingCha
       parsedCodePoint = parseInt(trimmedInput, 10);
     } else {
       // Treat as direct character input
-      const chars = Array.from(trimmedInput); // Handles surrogate pairs
+      // Fix: Explicitly type 'chars' as string[] to resolve TS error.
+      const chars: string[] = Array.from(trimmedInput); // Handles surrogate pairs
       if (chars.length === 1) {
         parsedChar = chars[0];
         parsedCodePoint = parsedChar.codePointAt(0)!;
