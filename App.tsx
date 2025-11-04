@@ -80,6 +80,7 @@ const App: React.FC = () => {
   const [rangeStart, setRangeStart] = useState('');
   const [rangeEnd, setRangeEnd] = useState('');
   const [charSetError, setCharSetError] = useState<string | null>(null);
+  const [draggedCharIndex, setDraggedCharIndex] = useState<number | null>(null);
 
   const debounceTimeout = useRef<number | null>(null);
 
@@ -456,6 +457,24 @@ const App: React.FC = () => {
             }
         }
       })();
+  };
+
+  const handleCharCopy = (sourceIndex: number, destinationIndex: number) => {
+    if (sourceIndex === destinationIndex || !fontData) return;
+
+    const newFontData = [...fontData];
+    const sourceChar = newFontData[sourceIndex];
+    const destinationChar = newFontData[destinationIndex];
+    
+    // Copy bitmap and bytes, but keep original char and codePoint
+    newFontData[destinationIndex] = {
+      ...destinationChar,
+      // Deep copy the bitmap to prevent reference sharing
+      bitmap: sourceChar.bitmap.map(row => [...row]),
+      bytes: [...sourceChar.bytes],
+    };
+
+    setFontData(newFontData);
   };
 
   const commonFonts = [
@@ -908,6 +927,9 @@ const App: React.FC = () => {
                   onCharClick={(index) => handleOpenEditor(index, false)}
                   onCharDelete={handleCharDelete}
                   onAddCharClick={() => setIsAddCharModalOpen(true)}
+                  draggedCharIndex={draggedCharIndex}
+                  setDraggedCharIndex={setDraggedCharIndex}
+                  onCharCopy={handleCharCopy}
                 />
                 <CodeOutput fontData={fontData} options={options} />
               </div>

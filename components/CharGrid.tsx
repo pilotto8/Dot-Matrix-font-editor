@@ -10,9 +10,22 @@ interface CharGridProps {
   onClick?: () => void;
   onDelete?: () => void;
   zoom?: number;
+  draggable?: boolean;
+  onDragStart?: (e: React.DragEvent) => void;
+  onDragOver?: (e: React.DragEvent) => void;
+  onDrop?: (e: React.DragEvent) => void;
+  onDragEnd?: (e: React.DragEvent) => void;
+  onDragEnter?: (e: React.DragEvent) => void;
+  onDragLeave?: (e: React.DragEvent) => void;
+  isBeingDragged?: boolean;
+  isDragTarget?: boolean;
 }
 
-const CharGrid: React.FC<CharGridProps> = ({ charData, width, height, onPixelToggle, onClick, onDelete, zoom = 1 }) => {
+const CharGrid: React.FC<CharGridProps> = ({ 
+    charData, width, height, onPixelToggle, onClick, onDelete, zoom = 1,
+    draggable, onDragStart, onDragOver, onDrop, onDragEnd, onDragEnter, onDragLeave,
+    isBeingDragged, isDragTarget 
+}) => {
 
   const basePixelSizeRem = 0.75;
   const scaledPixelSizeRem = basePixelSizeRem * zoom;
@@ -20,9 +33,14 @@ const CharGrid: React.FC<CharGridProps> = ({ charData, width, height, onPixelTog
 
   const containerClasses = [
     'bg-gray-900', 'p-3', 'rounded-lg', 'border', 'border-gray-700', 'flex', 'flex-col', 'items-center', 'shadow-md',
-    onClick ? 'cursor-pointer transition-all duration-150 hover:border-cyan-400 hover:scale-105' : '',
-    onDelete ? 'group relative' : ''
-  ].join(' ');
+    'transition-all duration-150',
+    onClick ? 'cursor-pointer' : '',
+    onDelete ? 'group relative' : '',
+    draggable ? 'cursor-grab' : '',
+    isBeingDragged ? 'opacity-50' : (isDragTarget ? '' : 'hover:border-cyan-400 hover:scale-105'),
+    isDragTarget ? 'border-cyan-400 scale-105 ring-2 ring-offset-2 ring-offset-gray-800 ring-cyan-400' : ''
+  ].filter(Boolean).join(' ');
+
 
   return (
     <div 
@@ -36,6 +54,13 @@ const CharGrid: React.FC<CharGridProps> = ({ charData, width, height, onPixelTog
           onClick();
         }
       }}
+      draggable={draggable}
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      onDragEnd={onDragEnd}
+      onDragEnter={onDragEnter}
+      onDragLeave={onDragLeave}
     >
        {onDelete && (
           <button 

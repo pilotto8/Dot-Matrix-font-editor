@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import type { GeneratedChar } from '../types';
 import { EyeIcon, PlusIcon } from './Icons';
 import CharGrid from './CharGrid';
@@ -10,16 +10,54 @@ interface FontPreviewProps {
   onCharClick: (index: number) => void;
   onCharDelete: (index: number) => void;
   onAddCharClick: () => void;
+  draggedCharIndex: number | null;
+  setDraggedCharIndex: (index: number | null) => void;
+  onCharCopy: (sourceIndex: number, destinationIndex: number) => void;
 }
 
-const FontPreview: React.FC<FontPreviewProps> = ({ fontData, height, onCharClick, onCharDelete, onAddCharClick }) => {
+const FontPreview: React.FC<FontPreviewProps> = ({ 
+  fontData, 
+  height, 
+  onCharClick, 
+  onCharDelete, 
+  onAddCharClick, 
+  draggedCharIndex, 
+  setDraggedCharIndex,
+  onCharCopy 
+}) => {
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    e.dataTransfer.effectAllowed = 'copy';
+    setDraggedCharIndex(index);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault(); // Necessary to allow drop
+  };
+
+  const handleDrop = (e: React.DragEvent, destinationIndex: number) => {
+    e.preventDefault();
+    if (draggedCharIndex !== null && draggedCharIndex !== destinationIndex) {
+      onCharCopy(draggedCharIndex, destinationIndex);
+    }
+    setDragOverIndex(null);
+    setDraggedCharIndex(null); // Reset on drop
+  };
+
+  const handleDragEnd = () => {
+    setDraggedCharIndex(null);
+    setDragOverIndex(null);
+  };
+
+
   return (
     <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl shadow-lg p-6 border border-gray-700">
       <div className="flex flex-wrap gap-4 justify-between items-center mb-4">
         <h2 className="text-2xl font-semibold text-cyan-300 flex items-center gap-2">
           <EyeIcon/>Visual Preview & Editor
         </h2>
-        <p className="text-sm text-gray-400">Click a character to edit, hover to delete, or add a new one.</p>
+        <p className="text-sm text-gray-400">Click to edit, drag to copy, hover to delete, or add a new one.</p>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-4">
@@ -33,6 +71,15 @@ const FontPreview: React.FC<FontPreviewProps> = ({ fontData, height, onCharClick
               height={height}
               onClick={() => onCharClick(index)}
               onDelete={() => onCharDelete(index)}
+              draggable
+              onDragStart={(e) => handleDragStart(e, index)}
+              onDragOver={handleDragOver}
+              onDrop={(e) => handleDrop(e, index)}
+              onDragEnd={handleDragEnd}
+              onDragEnter={() => draggedCharIndex !== index && setDragOverIndex(index)}
+              onDragLeave={() => setDragOverIndex(null)}
+              isBeingDragged={draggedCharIndex === index}
+              isDragTarget={dragOverIndex === index && draggedCharIndex !== index}
             />
           )
         })}
